@@ -181,14 +181,29 @@
             margin-top: 14px;
         }
 
-        .sort-select {
-            width: 100%;
+        .fuel-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .fuel-button {
             min-height: 44px;
-            padding: 10px 12px;
-            border: 1px solid #b8c3ce;
+            padding: 0 10px;
+            border: 1px solid var(--line);
             border-radius: var(--radius);
             background: #fff;
             color: var(--text);
+            font-weight: 850;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .fuel-button.is-active {
+            border-color: var(--brand);
+            background: var(--brand);
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18);
         }
 
         .ghost-button {
@@ -441,6 +456,10 @@
                 justify-self: start;
             }
 
+            .fuel-buttons {
+                grid-template-columns: 1fr;
+            }
+
             .prices {
                 grid-template-columns: 1fr;
             }
@@ -467,13 +486,12 @@
 
             <div class="tools-row">
                 <div>
-                    <label class="field-label" for="sortSelect">Filtre de tri</label>
-                    <select class="sort-select" id="sortSelect">
-                        <option value="">Tous les tarifs</option>
-                        <option value="gazole_prix:asc">Gazole le moins cher</option>
-                        <option value="e10_prix:asc">E10 le moins cher</option>
-                        <option value="sp95_prix:asc">SP95 le moins cher</option>
-                    </select>
+                    <span class="field-label">Carburant le moins cher</span>
+                    <div class="fuel-buttons" id="fuelButtons" aria-label="Choix du carburant">
+                        <button class="fuel-button" type="button" data-fuel="gazole_prix">Gazole</button>
+                        <button class="fuel-button" type="button" data-fuel="e10_prix">E10</button>
+                        <button class="fuel-button" type="button" data-fuel="sp95_prix">SP95</button>
+                    </div>
                 </div>
                 <button class="ghost-button" id="refreshButton" type="button">Actualiser</button>
             </div>
@@ -503,7 +521,7 @@
         const input = document.getElementById('codePostalInput');
         const form = document.getElementById('searchForm');
         const quickPicks = document.getElementById('quickPicks');
-        const sortSelect = document.getElementById('sortSelect');
+        const fuelButtons = document.getElementById('fuelButtons');
         const refreshButton = document.getElementById('refreshButton');
         const message = document.getElementById('message');
         const statusPill = document.getElementById('statusPill');
@@ -514,6 +532,7 @@
         const tableWrap = document.getElementById('tableWrap');
 
         let currentCodePostal = localStorage.getItem('carburant.codePostal') || '19100';
+        let selectedFuelField = '';
         let stations = [];
 
         const fuels = {
@@ -577,34 +596,21 @@
         }
 
         function sortedStations() {
-            if (!sortSelect.value) return [...stations];
+            if (!selectedFuelField) return [...stations];
 
-            const [field, direction] = sortSelect.value.split(':');
             const sorted = [...stations].sort((a, b) => {
-                let valueA = a[field];
-                let valueB = b[field];
+                const valueA = Number.isFinite(a[selectedFuelField]) ? a[selectedFuelField] : Number.POSITIVE_INFINITY;
+                const valueB = Number.isFinite(b[selectedFuelField]) ? b[selectedFuelField] : Number.POSITIVE_INFINITY;
 
-                if (field.endsWith('_maj')) {
-                    valueA = valueA ? new Date(valueA).getTime() : 0;
-                    valueB = valueB ? new Date(valueB).getTime() : 0;
-                } else if (typeof valueA === 'string' || typeof valueB === 'string') {
-                    valueA = String(valueA || '').toLowerCase();
-                    valueB = String(valueB || '').toLowerCase();
-                } else {
-                    valueA = Number.isFinite(valueA) ? valueA : Number.POSITIVE_INFINITY;
-                    valueB = Number.isFinite(valueB) ? valueB : Number.POSITIVE_INFINITY;
-                }
-
-                if (valueA > valueB) return direction === 'asc' ? 1 : -1;
-                if (valueA < valueB) return direction === 'asc' ? -1 : 1;
+                if (valueA > valueB) return 1;
+                if (valueA < valueB) return -1;
                 return 0;
             });
             return sorted;
         }
 
         function selectedFuel() {
-            const [field] = sortSelect.value.split(':');
-            return fuels[field] || null;
+            return fuels[selectedFuelField] || null;
         }
 
         function fuelBoxes(station) {
@@ -624,6 +630,14 @@
                     ${place.cp} ${escapeHtml(place.label)}
                 </button>
             `).join('');
+        }
+
+        function renderFuelButtons() {
+            fuelButtons.querySelectorAll('[data-fuel]').forEach(button => {
+                const isActive = button.dataset.fuel === selectedFuelField;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', String(isActive));
+            });
         }
 
         function renderCards(list) {
@@ -687,6 +701,7 @@
             const list = sortedStations();
             const fuel = selectedFuel();
             renderQuickPicks();
+            renderFuelButtons();
             resultsBar.hidden = false;
             resultsTitle.textContent = `${list.length} station${list.length > 1 ? 's' : ''} autour du ${currentCodePostal}${fuel ? ` - ${fuel.name}` : ''}`;
             updatedAt.textContent = `Recherche ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -759,7 +774,12 @@
             if (button) fetchPrices(button.dataset.cp);
         });
 
-        sortSelect.addEventListener('change', renderResults);
+        fuelButtons.addEventListener('click', event => {
+            const button = event.target.closest('[data-fuel]');
+            if (!button) return;
+            selectedFuelField = selectedFuelField === button.dataset.fuel ? '' : button.dataset.fuel;
+            renderResults();
+        });
 
         refreshButton.addEventListener('click', () => {
             fetchPrices(currentCodePostal);
@@ -767,6 +787,7 @@
 
         input.value = currentCodePostal;
         renderQuickPicks();
+        renderFuelButtons();
         fetchPrices(currentCodePostal);
     </script>
 </body>
