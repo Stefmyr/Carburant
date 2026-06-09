@@ -292,6 +292,10 @@
             margin-top: 14px;
         }
 
+        .prices.is-filtered {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
         .price-box {
             min-width: 0;
             padding: 10px;
@@ -352,7 +356,6 @@
             background: #f8fafc;
             color: #344054;
             font-size: 0.86rem;
-            cursor: pointer;
             user-select: none;
         }
 
@@ -464,14 +467,12 @@
 
             <div class="tools-row">
                 <div>
-                    <label class="field-label" for="sortSelect">Trier les stations</label>
+                    <label class="field-label" for="sortSelect">Filtre de tri</label>
                     <select class="sort-select" id="sortSelect">
+                        <option value="">Tous les tarifs</option>
                         <option value="gazole_prix:asc">Gazole le moins cher</option>
                         <option value="e10_prix:asc">E10 le moins cher</option>
                         <option value="sp95_prix:asc">SP95 le moins cher</option>
-                        <option value="adresse:asc">Adresse A-Z</option>
-                        <option value="ville:asc">Ville A-Z</option>
-                        <option value="gazole_maj:desc">Gazole mis à jour récemment</option>
                     </select>
                 </div>
                 <button class="ghost-button" id="refreshButton" type="button">Actualiser</button>
@@ -514,6 +515,12 @@
 
         let currentCodePostal = localStorage.getItem('carburant.codePostal') || '19100';
         let stations = [];
+
+        const fuels = {
+            gazole_prix: { name: 'Gazole', priceField: 'gazole_prix', dateField: 'gazole_maj' },
+            e10_prix: { name: 'E10', priceField: 'e10_prix', dateField: 'e10_maj' },
+            sp95_prix: { name: 'SP95', priceField: 'sp95_prix', dateField: 'sp95_maj' }
+        };
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -570,6 +577,8 @@
         }
 
         function sortedStations() {
+            if (!sortSelect.value) return [...stations];
+
             const [field, direction] = sortSelect.value.split(':');
             const sorted = [...stations].sort((a, b) => {
                 let valueA = a[field];
@@ -593,6 +602,22 @@
             return sorted;
         }
 
+        function selectedFuel() {
+            const [field] = sortSelect.value.split(':');
+            return fuels[field] || null;
+        }
+
+        function fuelBoxes(station) {
+            const fuelList = selectedFuel() ? [selectedFuel()] : Object.values(fuels);
+            return fuelList.map(fuel => `
+                <div class="price-box">
+                    <span class="fuel-name">${fuel.name}</span>
+                    <span class="fuel-price">${price(station[fuel.priceField])}</span>
+                    <span class="fuel-date">Maj ${compactDate(station[fuel.dateField])}</span>
+                </div>
+            `).join('');
+        }
+
         function renderQuickPicks() {
             quickPicks.innerHTML = defaultPlaces.map(place => `
                 <button class="chip${place.cp === currentCodePostal ? ' is-active' : ''}" type="button" data-cp="${place.cp}">
@@ -613,38 +638,36 @@
                         </div>
                         <a class="map-link" href="${mapsUrl(station)}" target="_blank" rel="noopener">Itinéraire</a>
                     </div>
-                    <div class="prices">
-                        <div class="price-box">
-                            <span class="fuel-name">Gazole</span>
-                            <span class="fuel-price">${price(station.gazole_prix)}</span>
-                            <span class="fuel-date">Maj ${compactDate(station.gazole_maj)}</span>
-                        </div>
-                        <div class="price-box">
-                            <span class="fuel-name">E10</span>
-                            <span class="fuel-price">${price(station.e10_prix)}</span>
-                            <span class="fuel-date">Maj ${compactDate(station.e10_maj)}</span>
-                        </div>
-                        <div class="price-box">
-                            <span class="fuel-name">SP95</span>
-                            <span class="fuel-price">${price(station.sp95_prix)}</span>
-                            <span class="fuel-date">Maj ${compactDate(station.sp95_maj)}</span>
-                        </div>
+                    <div class="prices${selectedFuel() ? ' is-filtered' : ''}">
+                        ${fuelBoxes(station)}
                     </div>
                 </article>
             `).join('');
         }
 
         function renderTable(list) {
+            const fuel = selectedFuel();
+            const fuelHeaders = fuel
+                ? `<th>${fuel.name}</th><th>Maj ${fuel.name}</th>`
+                : '<th>Gazole</th><th>Maj gazole</th><th>E10</th><th>Maj E10</th><th>SP95</th><th>Maj SP95</th>';
+            const fuelCells = station => fuel
+                ? `<td class="table-price">${price(station[fuel.priceField])}</td><td>${fullDate(station[fuel.dateField])}</td>`
+                : `
+                    <td class="table-price">${price(station.gazole_prix)}</td>
+                    <td>${fullDate(station.gazole_maj)}</td>
+                    <td class="table-price">${price(station.e10_prix)}</td>
+                    <td>${fullDate(station.e10_maj)}</td>
+                    <td class="table-price">${price(station.sp95_prix)}</td>
+                    <td>${fullDate(station.sp95_maj)}</td>
+                `;
+
             tableWrap.innerHTML = `
                 <table>
                     <thead>
                         <tr>
-                            <th data-sort="adresse:asc">Adresse</th>
-                            <th data-sort="ville:asc">Ville</th>
-                            <th data-sort="gazole_prix:asc">Gazole</th>
-                            <th data-sort="gazole_maj:desc">Maj gazole</th>
-                            <th data-sort="e10_prix:asc">E10</th>
-                            <th data-sort="sp95_prix:asc">SP95</th>
+                            <th>Adresse</th>
+                            <th>Ville</th>
+                            ${fuelHeaders}
                         </tr>
                     </thead>
                     <tbody>
@@ -652,10 +675,7 @@
                             <tr>
                                 <td><a class="table-address" href="${mapsUrl(station)}" target="_blank" rel="noopener">${escapeHtml(normalizeText(station.adresse || 'Adresse non renseignée'))}</a></td>
                                 <td>${escapeHtml(normalizeText(station.ville || ''))}</td>
-                                <td class="table-price">${price(station.gazole_prix)}</td>
-                                <td>${fullDate(station.gazole_maj)}</td>
-                                <td class="table-price">${price(station.e10_prix)}</td>
-                                <td class="table-price">${price(station.sp95_prix)}</td>
+                                ${fuelCells(station)}
                             </tr>
                         `).join('')}
                     </tbody>
@@ -665,9 +685,10 @@
 
         function renderResults() {
             const list = sortedStations();
+            const fuel = selectedFuel();
             renderQuickPicks();
             resultsBar.hidden = false;
-            resultsTitle.textContent = `${list.length} station${list.length > 1 ? 's' : ''} autour du ${currentCodePostal}`;
+            resultsTitle.textContent = `${list.length} station${list.length > 1 ? 's' : ''} autour du ${currentCodePostal}${fuel ? ` - ${fuel.name}` : ''}`;
             updatedAt.textContent = `Recherche ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 
             if (!list.length) {
@@ -742,13 +763,6 @@
 
         refreshButton.addEventListener('click', () => {
             fetchPrices(currentCodePostal);
-        });
-
-        tableWrap.addEventListener('click', event => {
-            const header = event.target.closest('[data-sort]');
-            if (!header) return;
-            sortSelect.value = header.dataset.sort;
-            renderResults();
         });
 
         input.value = currentCodePostal;
