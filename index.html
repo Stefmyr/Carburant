@@ -189,7 +189,7 @@
 
         .tools-row {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-columns: minmax(0, 1fr);
             align-items: end;
             gap: 10px;
             margin-top: 14px;
@@ -231,18 +231,6 @@
 
         .fuel-button.is-active small {
             color: #6b4a00;
-        }
-
-        .ghost-button {
-            min-height: 52px;
-            padding: 0 12px;
-            border: 1px solid var(--line);
-            border-radius: var(--radius);
-            background: #073b4c;
-            color: #fff;
-            font-weight: 800;
-            cursor: pointer;
-            touch-action: manipulation;
         }
 
         .message {
@@ -538,7 +526,6 @@
                         <button class="fuel-button" type="button" data-fuel="sp95_prix">SP95 <small>moins cher</small></button>
                     </div>
                 </div>
-                <button class="ghost-button" id="refreshButton" type="button">Actualiser</button>
             </div>
         </section>
 
@@ -567,7 +554,6 @@
         const form = document.getElementById('searchForm');
         const quickPicks = document.getElementById('quickPicks');
         const fuelButtons = document.getElementById('fuelButtons');
-        const refreshButton = document.getElementById('refreshButton');
         const message = document.getElementById('message');
         const statusPill = document.getElementById('statusPill');
         const resultsBar = document.getElementById('resultsBar');
@@ -768,7 +754,6 @@
             renderQuickPicks();
             showMessage('Chargement des prix...');
             statusPill.textContent = codePostal;
-            refreshButton.disabled = true;
 
             const params = new URLSearchParams({
                 select: 'cp, adresse, ville, gazole_prix, gazole_maj, e10_prix, e10_maj, sp95_prix, sp95_maj',
@@ -791,8 +776,6 @@
                 cards.innerHTML = '';
                 tableWrap.innerHTML = '';
                 showMessage(`Impossible de récupérer les prix : ${error.message}.`, 'error');
-            } finally {
-                refreshButton.disabled = false;
             }
         }
 
@@ -824,10 +807,6 @@
             if (!button) return;
             selectedFuelField = selectedFuelField === button.dataset.fuel ? '' : button.dataset.fuel;
             renderResults();
-        });
-
-        refreshButton.addEventListener('click', () => {
-            fetchPrices(currentCodePostal);
         });
 
         input.value = currentCodePostal;
