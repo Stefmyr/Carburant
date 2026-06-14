@@ -508,10 +508,10 @@
     </header>
 
     <main>
-        <section class="search-panel" aria-label="Recherche par code postal">
-            <label class="field-label" for="codePostalInput">Code postal</label>
+        <section class="search-panel" aria-label="Recherche par code postal ou commune">
+            <label class="field-label" for="codePostalInput">Code postal ou commune</label>
             <form class="search-row" id="searchForm">
-                <input id="codePostalInput" name="codePostal" type="text" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" placeholder="Ex. 19100">
+                <input id="codePostalInput" name="codePostal" type="search" autocomplete="postal-code" placeholder="Ex. 19100 ou Brive">
                 <button class="primary-button" type="submit">Rechercher</button>
             </form>
 
@@ -564,6 +564,7 @@
         const tableWrap = document.getElementById('tableWrap');
 
         let currentCodePostal = localStorage.getItem('carburant.codePostal') || '19100';
+        let currentSearchLabel = localStorage.getItem('carburant.searchLabel') || currentCodePostal;
         let selectedFuelField = '';
         let stations = [];
 
@@ -616,6 +617,33 @@
         function mapsUrl(station) {
             const query = `${station.adresse || ''} ${station.cp || ''} ${station.ville || ''}`.trim();
             return `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
+        }
+
+        function normalizeCommune(value) {
+            return String(value || '')
+                .trim()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[’']/g, ' ')
+                .replace(/-/g, ' ')
+                .replace(/\s+/g, ' ')
+                .toUpperCase();
+        }
+
+        function whereForSearch(value) {
+            const query = String(value || '').trim();
+            if (/^\d{5}$/.test(query)) {
+                return {
+                    label: query,
+                    where: `cp="${query}"`
+                };
+            }
+
+            const commune = normalizeCommune(query).replace(/"/g, '\\"');
+            return {
+                label: query,
+                where: `search(ville, "${commune}")`
+            };
         }
 
         function showMessage(text, type = 'info') {
@@ -740,7 +768,7 @@
             renderQuickPicks();
             renderFuelButtons();
             resultsBar.hidden = false;
-            resultsTitle.innerHTML = `<strong>${list.length}</strong> station${list.length > 1 ? 's' : ''} autour du ${currentCodePostal}${fuel ? ` - ${fuel.name}` : ''}`;
+            resultsTitle.innerHTML = `<strong>${list.length}</strong> station${list.length > 1 ? 's' : ''} pour ${escapeHtml(currentSearchLabel)}${fuel ? ` - ${fuel.name}` : ''}`;
             updatedAt.textContent = `Recherche ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 
             if (!list.length) {
@@ -753,16 +781,19 @@
             renderTable(list);
         }
 
-        async function fetchPrices(codePostal) {
-            currentCodePostal = codePostal;
-            input.value = codePostal;
-            localStorage.setItem('carburant.codePostal', codePostal);
+        async function fetchPrices(searchValue) {
+            const search = whereForSearch(searchValue);
+            currentCodePostal = /^\d{5}$/.test(search.label) ? search.label : '';
+            currentSearchLabel = search.label;
+            input.value = search.label;
+            localStorage.setItem('carburant.codePostal', currentCodePostal || search.label);
+            localStorage.setItem('carburant.searchLabel', search.label);
             renderQuickPicks();
             showMessage('Chargement des prix...');
-            statusPill.textContent = codePostal;
+            statusPill.textContent = search.label;
 
             const params = new URLSearchParams({
-                where: `cp="${codePostal}"`,
+                where: search.where,
                 limit: '40'
             });
 
@@ -785,19 +816,19 @@
 
         form.addEventListener('submit', event => {
             event.preventDefault();
-            const codePostal = input.value.trim();
-            if (!/^\d{5}$/.test(codePostal)) {
-                showMessage('Entre un code postal à 5 chiffres.', 'error');
+            const searchValue = input.value.trim();
+            if (searchValue.length < 2) {
+                showMessage('Entre un code postal ou une commune.', 'error');
                 input.focus();
                 return;
             }
-            fetchPrices(codePostal);
+            fetchPrices(searchValue);
         });
 
         input.addEventListener('input', () => {
-            input.value = input.value.replace(/\D/g, '').slice(0, 5);
-            if (input.value.length === 5) {
-                fetchPrices(input.value);
+            const value = input.value.trim();
+            if (/^\d{5}$/.test(value)) {
+                fetchPrices(value);
             }
         });
 
@@ -813,10 +844,10 @@
             renderResults();
         });
 
-        input.value = currentCodePostal;
+        input.value = currentSearchLabel;
         renderQuickPicks();
         renderFuelButtons();
-        fetchPrices(currentCodePostal);
+        fetchPrices(currentSearchLabel);
     </script>
 </body>
 </html>
