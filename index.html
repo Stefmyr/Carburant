@@ -197,7 +197,7 @@
 
         .fuel-buttons {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
         }
 
@@ -331,7 +331,7 @@
 
         .prices {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
             margin-top: 14px;
         }
@@ -386,7 +386,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 860px;
+            min-width: 1020px;
         }
 
         th,
@@ -524,6 +524,7 @@
                         <button class="fuel-button" type="button" data-fuel="gazole_prix">Gazole <small>moins cher</small></button>
                         <button class="fuel-button" type="button" data-fuel="e10_prix">E10 <small>moins cher</small></button>
                         <button class="fuel-button" type="button" data-fuel="sp95_prix">SP95 <small>moins cher</small></button>
+                        <button class="fuel-button" type="button" data-fuel="e85_prix">E85 <small>moins cher</small></button>
                     </div>
                 </div>
             </div>
@@ -569,7 +570,8 @@
         const fuels = {
             gazole_prix: { name: 'Gazole', priceField: 'gazole_prix', dateField: 'gazole_maj' },
             e10_prix: { name: 'E10', priceField: 'e10_prix', dateField: 'e10_maj' },
-            sp95_prix: { name: 'SP95', priceField: 'sp95_prix', dateField: 'sp95_maj' }
+            sp95_prix: { name: 'SP95', priceField: 'sp95_prix', dateField: 'sp95_maj' },
+            e85_prix: { name: 'E85', priceField: 'e85_prix', dateField: 'e85_maj' }
         };
 
         function escapeHtml(value) {
@@ -629,9 +631,11 @@
         function sortedStations() {
             if (!selectedFuelField) return [...stations];
 
-            const sorted = [...stations].sort((a, b) => {
-                const valueA = Number.isFinite(a[selectedFuelField]) ? a[selectedFuelField] : Number.POSITIVE_INFINITY;
-                const valueB = Number.isFinite(b[selectedFuelField]) ? b[selectedFuelField] : Number.POSITIVE_INFINITY;
+            const sorted = stations
+                .filter(station => Number.isFinite(station[selectedFuelField]))
+                .sort((a, b) => {
+                const valueA = a[selectedFuelField];
+                const valueB = b[selectedFuelField];
 
                 if (valueA > valueB) return 1;
                 if (valueA < valueB) return -1;
@@ -694,7 +698,7 @@
             const fuel = selectedFuel();
             const fuelHeaders = fuel
                 ? `<th>${fuel.name}</th><th>Maj ${fuel.name}</th>`
-                : '<th>Gazole</th><th>Maj gazole</th><th>E10</th><th>Maj E10</th><th>SP95</th><th>Maj SP95</th>';
+                : '<th>Gazole</th><th>Maj gazole</th><th>E10</th><th>Maj E10</th><th>SP95</th><th>Maj SP95</th><th>E85</th><th>Maj E85</th>';
             const fuelCells = station => fuel
                 ? `<td class="table-price">${price(station[fuel.priceField])}</td><td>${fullDate(station[fuel.dateField])}</td>`
                 : `
@@ -704,6 +708,8 @@
                     <td>${fullDate(station.e10_maj)}</td>
                     <td class="table-price">${price(station.sp95_prix)}</td>
                     <td>${fullDate(station.sp95_maj)}</td>
+                    <td class="table-price">${price(station.e85_prix)}</td>
+                    <td>${fullDate(station.e85_maj)}</td>
                 `;
 
             tableWrap.innerHTML = `
@@ -738,7 +744,7 @@
             updatedAt.textContent = `Recherche ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 
             if (!list.length) {
-                cards.innerHTML = '<div class="empty">Aucune station trouvée pour ce code postal.</div>';
+                cards.innerHTML = `<div class="empty">${fuel ? `Aucun prix ${fuel.name} disponible pour ce code postal.` : 'Aucune station trouvée pour ce code postal.'}</div>`;
                 tableWrap.innerHTML = '';
                 return;
             }
@@ -756,10 +762,8 @@
             statusPill.textContent = codePostal;
 
             const params = new URLSearchParams({
-                select: 'cp, adresse, ville, gazole_prix, gazole_maj, e10_prix, e10_maj, sp95_prix, sp95_maj',
                 where: `cp="${codePostal}"`,
-                limit: '40',
-                refine: 'carburants_disponibles:"Gazole"'
+                limit: '40'
             });
 
             try {
